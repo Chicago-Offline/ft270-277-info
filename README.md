@@ -62,7 +62,11 @@ byte in the model ID — they look interchangeable and are not. CHIRP's model
 check is what prevents a cross-band write.
 
 Cable: **RT Systems `CT57B`**, no driver install needed on macOS 26.
-Clone baud is **9600**. Full procedure and pitfalls: `PROGRAMMING-TOOLS.md`.
+Clone baud is **9600**. **Write confirmed working** — uploaded a real channel
+set to a physical FT-277R via `CHIRP.app`'s GUI, 2026-09-13. **Use CHIRP.app
+directly for programming**; this repo's `scripts/ft27x-*.py` are for headless
+model-ID probing, not yet reliable for full read-back verification (see
+`PROGRAMMING-TOOLS.md`). Full procedure and pitfalls there too.
 
 ## Status
 
@@ -80,7 +84,14 @@ source code gets tagged `⚠️ UNVERIFIED`. Don't launder a forum post into a f
       (8-byte header + 6048 data + 1), 32-byte blocks, 9600 baud.
 - [x] ~~Does an FT-277R report `AH022U` (i.e. `Yaesu_VX-177`)?~~ **Yes** —
       verified 2026-09-13.
-- [ ] Verify a *write* back to a radio, not just a read
+- [x] ~~Verify a *write* back to a radio, not just a read~~ **Yes** — CHIRP.app
+      GUI upload confirmed on a physical FT-277R, 2026-09-13.
+- [ ] Fix `scripts/ft27x-read.py` for reliable headless full-image
+      verification (header resync + block-ACK bugs found and fixed; not yet
+      proven end-to-end against a real full transfer)
+- [ ] `codeplugger` support for Yaesu HA2/FT-270R/FT-277R export (Eric taking
+      this on directly; channel data currently only resolves through
+      codeplugger's build pipeline, not present as static files here)
 - [ ] Exact memory map for channel entries beyond what `vx170.py` models
 - [ ] MARS/CAP / extended-TX mod procedure for each model
 - [ ] Firmware version string location and known revisions
