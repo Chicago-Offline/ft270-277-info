@@ -1,0 +1,14 @@
+# Vendor software — licensed, not redistributable
+cps/**
+!cps/.gitkeep
+!cps/README.md
+
+# Large binaries
+*.zip
+*.exe
+*.msi
+*.dmg
+
+# OS cruft
+.DS_Store
+Thumbs.db
