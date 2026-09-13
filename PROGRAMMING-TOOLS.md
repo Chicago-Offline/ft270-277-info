@@ -53,27 +53,82 @@ Two things to notice:
    siblings of the same submersible chassis. The FT-27x is widely believed to be
    the same hardware with amateur-market branding.
 2. **The driver hard-checks a model ID** (`AH022$` / `AH022U`) against the clone
-   image and raises `Invalid model` on mismatch. If the FT-270R reports a
-   different ID, a stock CHIRP will refuse the image even if the format is
-   otherwise identical.
+   image and raises `Invalid model` on mismatch.
 
-### The open question
+### ✅ ANSWERED 2026-09-13 — an FT-270R reports `AH022$`
 
-Does an FT-270R report `AH022$`? Two possible outcomes:
+**Bench-verified on a real FT-270R. Stock CHIRP programs this radio today with
+no patch, selected as `Yaesu VX-170`.**
 
-- **It matches** → CHIRP works today with the radio set to VX-170. Document it,
-  done.
-- **It doesn't** → the fix is a subclass with the real `_model` string, which is
-  a small, upstreamable CHIRP patch.
+```
+$ head -c 8 dumps/ft270r-2026-09-13-read.img | xxd
+00000000: 4148 3032 3224 0001                      AH022$..
+```
 
-**To answer it:** put the radio in clone-out mode, capture the image, and read
-the model field. Save the capture to `dumps/`. Do not skip straight to patching
-out the check — the check is what stops you writing a VX-170 image into
-something that isn't one.
+Full verification against `Yaesu_VX-170`:
+
+| Check | Result |
+|---|---|
+| Image size | 6057 bytes = driver `_memsize` exactly |
+| `model[6]` field | `AH022$` — matches `_model` |
+| `check_checksums()` | OK |
+| `get_features().memory_bounds` | `(1, 200)` |
+| Channel decode | clean (ch 1 = 144.0000) |
+| SHA-256 | `afc865b2a60d9369c9cf927cc732f7c8b860e1ede34d7f6c5beb26baed1a8437` |
+
+So the FT-270R is a rebadged VX-170 as far as the clone protocol and memory
+layout are concerned. No CHIRP patch, no fork, no upstream PR needed. By
+symmetry the FT-277R is expected to report `AH022U` (`Yaesu_VX-177`) — ⚠️ still
+UNVERIFIED, no FT-277R on the bench yet.
+
+### 🔴 Clone baud is 9600 — don't go chasing baud rates
+
+The first read attempt failed with `Failed to read header (2)` and the radio
+displayed `ERROR`. That looks like a baud mismatch and **is not**. Two real
+causes, both operator-side:
+
+1. The radio only transmits for a moment after PTT. If the host is not already
+   listening at that instant, it catches a fragment or nothing.
+2. When the driver gives up mid-header it never sends the ACK the radio is
+   waiting for, so the radio itself shows `ERROR`. The radio is reporting *our*
+   failure, not its own.
+
+A baud sweep during PTT presses produced non-ASCII garbage at 4800/38400/57600
+(saved in `dumps/sniff-*.bin`) purely because those were the wrong rate — at
+9600 the very first successful capture began with clean `AH022$`. **9600, the
+driver's own value, was correct from the start.**
+
+Also worth knowing: the CT57B cable does **not** echo TX back to RX (verified by
+writing a probe pattern and reading nothing back). So `0x06` bytes appearing in
+a capture are genuinely from the radio and not your own ACKs reflected.
+
+### Capturing an image
+
+`scripts/ft27x-probe.py` performs a read-only capture: it runs `sync_in()`, lets
+the model check fail if it's going to, scans for an `AHnnnX`-style ID, and saves
+to `dumps/`.
+
+`scripts/ft27x-sniff.py` is the fallback when a driver read fails and you need
+ground truth — no driver, optional baud sweep, hexdumps whatever arrives.
+
+**Arm the host first, then press PTT.** Not the other way around.
 
 `scripts/ft27x-probe.py` does exactly this. It is read-only: it runs `sync_in()`,
 lets the model check fail if it's going to, then scans the captured bytes for an
 `AHnnnX`-style ID and saves the image to `dumps/`.
+
+### Verified working cable
+
+**RT Systems `CT57B Radio Cable`** — USB-A, enumerates on macOS 26 with **no
+driver install**:
+
+```
+/dev/cu.usbserial-RTWBKOPI
+vid=0x2100 pid=0x9e52  "CT57B Radio Cable" / "RT Systems"
+```
+
+The `/dev/cu.usbserial-<SERIAL>` node is named from the cable's USB serial
+number, so the path differs per cable. Discover it, don't hardcode it.
 
 ### Bench setup (macOS, verified 2026-09-13)
 
@@ -97,13 +152,31 @@ Confirmed working: 556 drivers load, including `Yaesu_VX-170` (`AH022$`) and
 
 ```bash
 cd ~/src/ft270-277-info
-~/src/chirp-src/.venv/bin/python scripts/ft27x-probe.py --port /dev/cu.usbserial-XXXX
-# 70cm:
-#   ... --driver Yaesu_VX-177
+~/src/chirp-src/.venv/bin/python scripts/ft27x-probe.py \
+    --port /dev/cu.usbserial-RTWBKOPI --read-timeout 6 \
+    --out dumps/ft270r-$(date +%F)-read.img
+# 70cm:  ... --driver Yaesu_VX-177
 ```
 
-With a bad or missing port it lists the serial devices that *do* exist, which is
-the fastest way to tell a cable problem from a software problem.
+`--read-timeout` sets the per-read serial timeout; the driver retries the header
+30x, so the usable PTT window is roughly `30 x` that value. `6` gives a
+comfortable ~90 s. With a bad or missing port the script lists the serial
+devices that *do* exist — fastest way to tell a cable problem from a software
+problem.
+
+### Radio-side clone-out procedure (verified)
+
+From the driver's own `pre_download` prompt, confirmed working:
+
+1. Turn the radio **off**.
+2. Connect the cable to the **MIC/SP** jack.
+3. Hold **[MONI]** while turning the radio **on**.
+4. Select **CLONE** in the menu, press **F**. Radio restarts in clone mode and
+   shows `CLONE`.
+5. Arm the host, *then* briefly hold **[PTT]**. `-TX-` appears and the image
+   sends.
+
+Press PTT **once** per attempt. A second burst mid-transfer corrupts the stream.
 
 ### Driver lineage
 

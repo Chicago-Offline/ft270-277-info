@@ -42,18 +42,36 @@ handheld.
 | `dumps/` | Clone-mode captures and memory images |
 | `cps/` | Vendor/RT Systems software artifacts (no redistribution of licensed binaries) |
 
+## ✅ Programming: solved for the FT-270R
+
+**There is no OEM CPS for these radios**, and RT Systems is Windows-only — but
+**stock CHIRP programs the FT-270R today with no patch.** Select `Yaesu VX-170`.
+
+Bench-verified 2026-09-13 against a real FT-270R: the clone image is 6057 bytes,
+checksums validate, 200 channels decode, and the `model[6]` field reads `AH022$`
+— byte-identical to what `chirp/drivers/vx170.py` expects. The FT-270R is a
+rebadged VX-170 at the protocol level.
+
+Cable: **RT Systems `CT57B`**, no driver install needed on macOS 26.
+Clone baud is **9600**. Full procedure and pitfalls: `PROGRAMMING-TOOLS.md`.
+
 ## Status
 
-Early scaffold. Most sections are TODO and explicitly marked as such.
+Programming path solved; hardware specs still thin. Most `SPECS.md` rows are
+vendor marketing copy, not bench measurements.
 
 **Rule for this repo:** anything not verified against a manual, a live radio, or
 source code gets tagged `⚠️ UNVERIFIED`. Don't launder a forum post into a fact.
 
 ## Open questions
 
-- [ ] Does the CHIRP VX-170/VX-177 driver read/write these without patching?
-      (Driver enforces a model-ID check — see `PROGRAMMING-TOOLS.md`.)
-- [ ] Clone-mode protocol and image size — is it the `ft7800`-family format?
-- [ ] Exact memory map for channel entries
+- [x] ~~Does the CHIRP VX-170/VX-177 driver read these without patching?~~
+      **Yes for FT-270R** — reports `AH022$`, verified 2026-09-13.
+- [x] ~~Clone-mode protocol and image size~~ — `ft7800`-family, 6057 bytes
+      (8-byte header + 6048 data + 1), 32-byte blocks, 9600 baud.
+- [ ] Does an FT-277R report `AH022U` (i.e. `Yaesu_VX-177`)? Expected by
+      symmetry, **unverified** — no FT-277R on the bench.
+- [ ] Verify a *write* back to the radio, not just a read
+- [ ] Exact memory map for channel entries beyond what `vx170.py` models
 - [ ] MARS/CAP / extended-TX mod procedure for each model
 - [ ] Firmware version string location and known revisions

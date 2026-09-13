@@ -36,6 +36,10 @@ def main():
                          "use Yaesu_VX-177 for the 70cm FT-277R)")
     ap.add_argument("--out", default=None,
                     help="output .img path (default: dumps/<driver>-<date>.img)")
+    ap.add_argument("--read-timeout", type=float, default=2.0,
+                    help="per-read serial timeout in seconds. The driver retries "
+                         "the header 30x, so the window to press PTT is roughly "
+                         "30 x this value (default 2.0 = 60s)")
     args = ap.parse_args()
 
     try:
@@ -64,7 +68,7 @@ def main():
     try:
         ser = serial.Serial(port=args.port, baudrate=cls.BAUD_RATE,
                             rtscts=getattr(cls, "HARDWARE_FLOW", False),
-                            timeout=1)
+                            timeout=args.read_timeout)
     except serial.SerialException as e:
         print("error: could not open %s: %s" % (args.port, e))
         print("\nAvailable serial ports:")
@@ -102,7 +106,14 @@ def main():
                  "cable, the port, and that clone-out was actually started.")
 
     raw = mmap.get_packed() if hasattr(mmap, "get_packed") else bytes(mmap)
-    print("\ncaptured: %d bytes" % len(raw))
+    print("\ncaptured: %d bytes (driver expects %s)"
+          % (len(raw), getattr(cls, "_memsize", "?")))
+
+    # vx170 MEM_FORMAT declares `char model[6];` at offset 0 — the model ID is
+    # literally the first six bytes of the image.
+    print("model[0:6]: %r  (hex %s)"
+          % (raw[:6].decode("ascii", "replace"), raw[:6].hex(" ")))
+    print("expected:   %r" % getattr(cls, "_model", None))
 
     # Yaesu model IDs in this family look like AH022$ / AH022U.
     hits = [(m.start(), m.group().decode("ascii", "replace"))
