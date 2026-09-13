@@ -42,23 +42,32 @@ handheld.
 | `dumps/` | Clone-mode captures and memory images |
 | `cps/` | Vendor/RT Systems software artifacts (no redistribution of licensed binaries) |
 
-## ✅ Programming: solved for the FT-270R
+## ✅ Programming: solved for both radios
 
 **There is no OEM CPS for these radios**, and RT Systems is Windows-only — but
-**stock CHIRP programs the FT-270R today with no patch.** Select `Yaesu VX-170`.
+**stock CHIRP programs both today with no patch:**
 
-Bench-verified 2026-09-13 against a real FT-270R: the clone image is 6057 bytes,
-checksums validate, 200 channels decode, and the `model[6]` field reads `AH022$`
-— byte-identical to what `chirp/drivers/vx170.py` expects. The FT-270R is a
-rebadged VX-170 at the protocol level.
+| Radio | Select in CHIRP | Model ID | Verified |
+|---|---|---|---|
+| FT-270R | `Yaesu VX-170` | `AH022$` | ✅ 2026-09-13 |
+| FT-277R | `Yaesu VX-177` | `AH022U` | ✅ 2026-09-13 |
+
+Bench-verified against both physical radios: 6057-byte clone images, checksums
+validate, 200 channels decode, model IDs byte-identical to what
+`chirp/drivers/vx170.py` expects. Both are rebadged VX-17x radios at the
+protocol level.
+
+⚠️ **Match driver to band.** The two images are the same size and differ by one
+byte in the model ID — they look interchangeable and are not. CHIRP's model
+check is what prevents a cross-band write.
 
 Cable: **RT Systems `CT57B`**, no driver install needed on macOS 26.
 Clone baud is **9600**. Full procedure and pitfalls: `PROGRAMMING-TOOLS.md`.
 
 ## Status
 
-Programming path solved; hardware specs still thin. Most `SPECS.md` rows are
-vendor marketing copy, not bench measurements.
+Programming path solved for both models; hardware specs still thin. Most
+`SPECS.md` rows are vendor marketing copy, not bench measurements.
 
 **Rule for this repo:** anything not verified against a manual, a live radio, or
 source code gets tagged `⚠️ UNVERIFIED`. Don't launder a forum post into a fact.
@@ -69,9 +78,9 @@ source code gets tagged `⚠️ UNVERIFIED`. Don't launder a forum post into a f
       **Yes for FT-270R** — reports `AH022$`, verified 2026-09-13.
 - [x] ~~Clone-mode protocol and image size~~ — `ft7800`-family, 6057 bytes
       (8-byte header + 6048 data + 1), 32-byte blocks, 9600 baud.
-- [ ] Does an FT-277R report `AH022U` (i.e. `Yaesu_VX-177`)? Expected by
-      symmetry, **unverified** — no FT-277R on the bench.
-- [ ] Verify a *write* back to the radio, not just a read
+- [x] ~~Does an FT-277R report `AH022U` (i.e. `Yaesu_VX-177`)?~~ **Yes** —
+      verified 2026-09-13.
+- [ ] Verify a *write* back to a radio, not just a read
 - [ ] Exact memory map for channel entries beyond what `vx170.py` models
 - [ ] MARS/CAP / extended-TX mod procedure for each model
 - [ ] Firmware version string location and known revisions

@@ -55,31 +55,44 @@ Two things to notice:
 2. **The driver hard-checks a model ID** (`AH022$` / `AH022U`) against the clone
    image and raises `Invalid model` on mismatch.
 
-### ✅ ANSWERED 2026-09-13 — an FT-270R reports `AH022$`
+### ✅ ANSWERED 2026-09-13 — both radios verified on the bench
 
-**Bench-verified on a real FT-270R. Stock CHIRP programs this radio today with
-no patch, selected as `Yaesu VX-170`.**
+**Stock CHIRP programs both radios today with no patch.**
+
+| Radio | Select in CHIRP | Model ID | Verified |
+|---|---|---|---|
+| FT-270R | `Yaesu VX-170` | `AH022$` | ✅ 2026-09-13 |
+| FT-277R | `Yaesu VX-177` | `AH022U` | ✅ 2026-09-13 |
+
+Headers, side by side:
 
 ```
-$ head -c 8 dumps/ft270r-2026-09-13-read.img | xxd
-00000000: 4148 3032 3224 0001                      AH022$..
+FT-270R  41 48 30 32 32 24 00 01 00 81 47 33 02 00 00 00   AH022$....G3....
+FT-277R  41 48 30 32 32 55 80 01 03 04 62 55 24 00 00 00   AH022U....bU$...
 ```
 
-Full verification against `Yaesu_VX-170`:
+The ID differs only at byte 5 (`$` 0x24 vs `U` 0x55) — exactly the split CHIRP's
+`VX170Radio` / `VX177Radio` pair encodes. Bytes 6+ are radio-specific header,
+not part of the 6-byte model field.
 
-| Check | Result |
-|---|---|
-| Image size | 6057 bytes = driver `_memsize` exactly |
-| `model[6]` field | `AH022$` — matches `_model` |
-| `check_checksums()` | OK |
-| `get_features().memory_bounds` | `(1, 200)` |
-| Channel decode | clean (ch 1 = 144.0000) |
-| SHA-256 | `afc865b2a60d9369c9cf927cc732f7c8b860e1ede34d7f6c5beb26baed1a8437` |
+Full verification:
 
-So the FT-270R is a rebadged VX-170 as far as the clone protocol and memory
-layout are concerned. No CHIRP patch, no fork, no upstream PR needed. By
-symmetry the FT-277R is expected to report `AH022U` (`Yaesu_VX-177`) — ⚠️ still
-UNVERIFIED, no FT-277R on the bench yet.
+| Check | FT-270R | FT-277R |
+|---|---|---|
+| Image size | 6057 = `_memsize` | 6057 = `_memsize` |
+| `model[6]` | `AH022$` ✓ | `AH022U` ✓ |
+| `check_checksums()` | OK | OK |
+| `memory_bounds` | `(1, 200)` | `(1, 200)` |
+| `valid_bands` | 2 m | 420–470 MHz |
+| Channel decode | ch 1 = 144.0000 | ch 1 = 462.5500 `FAMRPT` |
+| SHA-256 | `afc865b2a60d…d1a8437` | `44d78da4b5a7…0a49327` |
+
+So both are rebadged VX-17x radios as far as the clone protocol and memory
+layout are concerned. No CHIRP patch, no fork, no upstream PR needed for either.
+
+⚠️ **Match the driver to the band.** `Yaesu_VX-170` against an FT-277R (or the
+reverse) fails the model check by design. That check is a guard, not an
+obstacle — see the warning in the safety section.
 
 ### 🔴 Clone baud is 9600 — don't go chasing baud rates
 
@@ -241,9 +254,12 @@ USB-A port, or a known-good powered data hub, before debugging anything else.
 
 - **Back up before you write.** Read the radio, save the image to `dumps/`,
   confirm the file is non-trivial in size, *then* write.
-- **Never write a VX-170 image to an FT-277R or vice versa.** VHF and UHF band
-  data in a 70 cm radio is at best useless and at worst puts the PA somewhere it
-  shouldn't be.
+- **Never write a VX-170/FT-270R image to an FT-277R or vice versa.** The two
+  images are the same size and differ by one byte in the model ID, so they look
+  interchangeable and are not. Confirmed on the bench: the FT-270R image holds
+  2 m data, the FT-277R image holds 420–470 MHz data. Cross-loading puts
+  out-of-band frequencies in front of the PA. The driver's model check is the
+  only thing standing between you and that — don't defeat it.
 - Re-read after every write and diff against what you intended. Progress bars
   lie; a completed write is not a verified write.
 - Extended-TX / MARS-CAP mods are a separate question from programming. Don't
