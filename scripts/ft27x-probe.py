@@ -82,6 +82,19 @@ def main():
             print("  Check the cable/port before blaming software:")
             print("    ioreg -p IOUSB -l -w0 | grep 'USB Product Name'")
         sys.exit(1)
+
+    # Critical: flush stale bytes before handing the port to the driver.
+    # ft7800._download does read(8) and breaks out of its retry loop on the
+    # FIRST non-empty result. Leftover bytes from a previous session make it
+    # break immediately with a short header and fail as
+    # "Failed to read header (2)" without ever reaching the radio's real data.
+    stale = ser.read(4096)
+    if stale:
+        print("flushed %d stale byte(s) from input buffer: %s"
+              % (len(stale), stale[:16].hex(" ")))
+    ser.reset_input_buffer()
+    ser.reset_output_buffer()
+
     radio = cls(ser)
 
     err = None

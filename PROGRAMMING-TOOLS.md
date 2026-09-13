@@ -94,6 +94,21 @@ layout are concerned. No CHIRP patch, no fork, no upstream PR needed for either.
 reverse) fails the model check by design. That check is a guard, not an
 obstacle — see the warning in the safety section.
 
+### ✅ Upload/write confirmed working — use CHIRP.app directly, not a headless script
+
+**2026-09-13: uploaded a 2-channel test set to a real FT-277R via `CHIRP.app`'s
+normal GUI (File → Open CSV → Radio → Upload To Radio). Confirmed present on
+the physical radio afterward.** This is the recommended path for actually
+programming a radio.
+
+This project's headless scripts (`ft27x-probe.py`, `ft27x-read.py`,
+`ft27x-write.py`) hit real, since-fixed protocol bugs on *read-back
+verification* (see below) before this succeeded. **The GUI upload worked on
+the first real attempt once it was tried** — the radio, cable, and clone
+protocol were never the problem; my custom reader was. If you just want
+channels on the radio, use CHIRP.app. Use the scripts here for headless
+model-ID probing, not yet for routine read/write.
+
 ### 🔴 Clone baud is 9600 — don't go chasing baud rates
 
 The first read attempt failed with `Failed to read header (2)` and the radio
