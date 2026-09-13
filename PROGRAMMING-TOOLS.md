@@ -2,18 +2,25 @@
 
 ## Summary
 
-There is **no official Yaesu programming software** for these radios. The
-practical options are RT Systems (paid, Windows) or CHIRP via the VX-170 family
-driver (free, cross-platform, with a caveat).
+**There is no OEM CPS for these radios.** Yaesu never shipped first-party
+programming software for the FT-270R or FT-277R — unlike the Chinese radios in
+our other `-info` repos, there is no vendor CPS to hunt down, no CPS password,
+and no vendor `.dat` format to reverse. `ADMS-270` / `ADMS-277` are **RT Systems
+third-party products**, not Yaesu software; the ADMS name is licensed branding.
+
+That leaves two real paths, and on macOS it leaves exactly one.
 
 | Path | Platform | Cost | Status |
 |---|---|---|---|
-| RT Systems `ADMS-270` / `ADMS-277` | Windows | paid | Vendor-supported |
+| RT Systems `ADMS-270` / `ADMS-277` | Windows only | paid | Third-party, not OEM |
 | CHIRP, VX-170 / VX-177 driver | macOS / Linux / Win | free | ⚠️ Model-ID check, see below |
 | Radio-to-radio clone | n/a | free | Built-in, manual procedure |
 | Front panel | n/a | free | 200 channels by hand. Don't. |
 
-## RT Systems
+**On macOS, CHIRP is the path.** RT Systems ships no macOS build, so the
+model-ID question below is the whole ballgame, not an academic curiosity.
+
+## RT Systems (third-party, not OEM)
 
 - `ADMS-270` — FT-270R. `ADMS-277` — FT-277R.
 - Sold as software + cable kits. The cable is the interesting part: it plugs
@@ -64,6 +71,40 @@ the model field. Save the capture to `dumps/`. Do not skip straight to patching
 out the check — the check is what stops you writing a VX-170 image into
 something that isn't one.
 
+`scripts/ft27x-probe.py` does exactly this. It is read-only: it runs `sync_in()`,
+lets the model check fail if it's going to, then scans the captured bytes for an
+`AHnnnX`-style ID and saves the image to `dumps/`.
+
+### Bench setup (macOS, verified 2026-09-13)
+
+CHIRP's own `chirpc` wrapper produced no output at all on this machine (exit 0,
+zero bytes, even for `--help`) — unresolved. The library imports fine, so the
+probe script uses the library directly and sidesteps it.
+
+PyPI `chirp` is an **unrelated package** (it fails to build on `vitterbi.pyf`).
+Install from source, without wxPython:
+
+```bash
+git clone --depth 1 https://github.com/kk7ds/chirp.git ~/src/chirp-src
+cd ~/src/chirp-src
+uv venv .venv
+uv pip install --python .venv/bin/python pyserial requests suds yattag lark
+uv pip install --python .venv/bin/python --no-deps -e .
+```
+
+Confirmed working: 556 drivers load, including `Yaesu_VX-170` (`AH022$`) and
+`Yaesu_VX-177` (`AH022U`).
+
+```bash
+cd ~/src/ft270-277-info
+~/src/chirp-src/.venv/bin/python scripts/ft27x-probe.py --port /dev/cu.usbserial-XXXX
+# 70cm:
+#   ... --driver Yaesu_VX-177
+```
+
+With a bad or missing port it lists the serial devices that *do* exist, which is
+the fastest way to tell a cable problem from a software problem.
+
 ### Driver lineage
 
 `VX170Radio` inherits `ft7800.FTx800Radio`, so the clone format is the
@@ -74,6 +115,24 @@ than reversing from zero.
 
 Built into the radio, no computer needed. ⚠️ UNVERIFIED key combo and cable
 type — pull the exact procedure from the operating manual and record it here.
+
+## Cable troubleshooting
+
+These radios have **no USB port**. The USB is on the computer end of a cable
+whose radio end is the 4-pin waterproof mic jack. So "plugged in via USB" means
+the *cable's* USB-serial chip must enumerate first — the radio is not involved
+and does not need to be powered for that to happen.
+
+```bash
+ls /dev/cu.*                                        # expect a cu.usbserial-* / cu.SLAB_* / cu.usbmodem*
+ioreg -p IOUSB -l -w0 | grep '"USB Product Name"'   # what actually enumerated
+log show --last 5m --predicate 'subsystem == "com.apple.iokit.IOUSBHostFamily"' --style compact | tail -20
+```
+
+If `ioreg` shows only Apple hubs, the USB link is not up at all. That is
+physical — dead cable, charge-only cable, unpowered hub, or a port that isn't
+seated. No driver install fixes it, because a missing driver still enumerates
+the device and merely fails to bind a `/dev/cu.*` node.
 
 ## Safety rails
 
