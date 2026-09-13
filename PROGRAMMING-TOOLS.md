@@ -134,6 +134,36 @@ physical — dead cable, charge-only cable, unpowered hub, or a port that isn't
 seated. No driver install fixes it, because a missing driver still enumerates
 the device and merely fails to bind a `/dev/cu.*` node.
 
+### Telling a blocked accessory from a dead link
+
+macOS can *block* an accessory ("Allow accessory to connect" → denied, and the
+denial is remembered). That looks superficially similar but is **not** the same
+failure, and the log distinguishes them:
+
+- **Blocked accessory** → the port still sees the electrical attach, so
+  `IOUSBHostFamily` logs port/connect events, plus an authorization denial.
+  Fix: System Settings → Privacy & Security → *Allow accessories to connect*.
+- **Dead link** → **no `IOUSBHostFamily` events at all.** The host controller
+  never saw a device. Nothing in software will help.
+
+```bash
+/usr/bin/log show --start "YYYY-MM-DD HH:MM:SS" \
+  --predicate 'subsystem == "com.apple.iokit.IOUSBHostFamily"' --style compact
+```
+
+Use the **absolute path** `/usr/bin/log` — a shell alias or function named `log`
+will shadow it and fail with `too many arguments`, which prints nothing and
+looks exactly like "no events found." That false negative is easy to act on by
+mistake.
+
+### RT Systems cables are USB-A
+
+RT Systems programming cables terminate in **USB-A**. Current Apple desktops and
+laptops are USB-C only, so an adapter or hub is always in the path — and that
+adapter is now the most likely failure point. Charge-only adapters and
+unpowered/undetected hubs both produce a completely silent bus. Prefer a direct
+USB-A port, or a known-good powered data hub, before debugging anything else.
+
 ## Safety rails
 
 - **Back up before you write.** Read the radio, save the image to `dumps/`,
