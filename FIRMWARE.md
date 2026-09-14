@@ -15,6 +15,13 @@ firmware is factory-only unless proven otherwise.
 - [ ] Soft reset / microprocessor reset, if distinct from hard reset
 - [ ] Extended TX (MARS/CAP) modification — jumper, solder, or key sequence?
       Record it per model; VHF and UHF versions are usually different.
+      **Both bench radios arrived already modded** (owner-reported 2026-09-13),
+      so the procedure cannot be recovered by inspection here. What the mod
+      *does* is partly observed: the FT-277R stored and accepted a 462.5500 MHz
+      channel through the normal clone path. The actual transmit span has **not**
+      been measured on either radio — do not assume it matches the CHIRP
+      driver's `valid_bands` (137–174 / 420–470 MHz), which is only the upper
+      bound the programming path will accept.
 - [ ] Whether any authorized-dealer firmware update ever existed
 
 ## Rules

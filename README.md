@@ -39,6 +39,7 @@ handheld.
 | `PROGRAMMING-TOOLS.md` | ADMS-270/277, cloning, cable, CHIRP status |
 | `FIRMWARE.md` | Version strings, service menus, alignment notes |
 | `REFERENCES.md` | Manuals, product pages, community threads |
+| `scripts/` | Headless probe / build / write / sniff tools |
 | `dumps/` | Clone-mode captures and memory images |
 | `cps/` | Vendor/RT Systems software artifacts (no redistribution of licensed binaries) |
 
@@ -62,16 +63,63 @@ byte in the model ID — they look interchangeable and are not. CHIRP's model
 check is what prevents a cross-band write.
 
 Cable: **RT Systems `CT57B`**, no driver install needed on macOS 26.
-Clone baud is **9600**. **Write confirmed working** — uploaded a real channel
-set to a physical FT-277R via `CHIRP.app`'s GUI, 2026-09-13. **Use CHIRP.app
-directly for programming**; this repo's `scripts/ft27x-*.py` are for headless
-model-ID probing, not yet reliable for full read-back verification (see
-`PROGRAMMING-TOOLS.md`). Full procedure and pitfalls there too.
+Clone baud is **9600**.
+
+### Headless end-to-end write — verified on both radios
+
+**2026-09-13: both radios were programmed from a codeplug source with no GUI,
+and each read back byte-identical to the image sent.** `CHIRP.app`'s GUI upload
+also works and remains a fine option; it is no longer the only one.
+
+```bash
+PY=~/src/chirp/.venv/bin/python
+PORT=/dev/cu.usbserial-RTWBKOPI
+DRV=Yaesu_VX-177                      # Yaesu_VX-170 for the FT-270R
+BAK=~/src/codeplug-backups/ft277_eam_20260913   # NOT dumps/ — see below
+
+$PY scripts/ft27x-probe.py      --port $PORT --driver $DRV \
+      --read-timeout 6 --out $BAK/before.img        # 1. back up, always
+$PY scripts/ft27x-csv-to-img.py --base $BAK/before.img --csv codeplug.csv \
+      --driver $DRV --out new.img                   # 2. CSV + base -> image
+$PY scripts/ft27x-write.py      --img new.img --driver $DRV
+$PY scripts/ft27x-write.py      --img new.img --driver $DRV --port $PORT --yes
+$PY scripts/ft27x-probe.py      --port $PORT --driver $DRV \
+      --read-timeout 6 --out $BAK/after.img         # 3. verify
+cmp new.img $BAK/after.img                          # must be silent
+```
+
+| | FT-270R | FT-277R |
+|---|---|---|
+| Channels written | 24 | 31 |
+| Read-back SHA-256 | `f290bff3bf7c…b94aaf9c` | `8a94fba316ad…8457c3be` |
+| `cmp` vs sent image | identical | identical |
+
+CSVs came from `codeplugger`’s `--output-format chirp-csv`
+(`muehlstein-codeplugger-profiles`, radio ids `yaesu_ft270_mars` /
+`yaesu_ft277_mars`), but any CHIRP-format CSV works.
+
+⚠️ **Keep real codeplugs out of this repo.** It is public, and a programmed
+radio's image carries the owner's actual channel plan — private frequencies,
+tone and DCS codes — which CHIRP decodes in seconds. Session backups belong in a
+private store; `dumps/` holds only near-factory reference captures. See
+[`dumps/README.md`](dumps/README.md).
+
+⚠️ **Clone direction reverses the operator order.** This is the single easiest
+thing to get wrong, and it cost one failed read on 2026-09-13:
+
+- **Read** — radio shows `CLONE`, **arm the host first**, *then* press PTT once.
+- **Write** — radio shows `CLONE` → `[MONI]` → `-RX-`, *then* run the host.
+
+⚠️ **Match driver to band.** The two clone images are the same size and differ by
+one byte in the model ID — they look interchangeable and are not. CHIRP's model
+check is what prevents a cross-band write, and `ft27x-write.py` re-checks it
+independently before sending a byte (bench-tested: it refuses).
 
 ## Status
 
-Programming path solved for both models; hardware specs still thin. Most
-`SPECS.md` rows are vendor marketing copy, not bench measurements.
+Programming solved for both models, read and write, GUI and headless. Hardware
+specs still thin — most `SPECS.md` rows are vendor marketing copy, not bench
+measurements.
 
 **Rule for this repo:** anything not verified against a manual, a live radio, or
 source code gets tagged `⚠️ UNVERIFIED`. Don't launder a forum post into a fact.
@@ -86,12 +134,17 @@ source code gets tagged `⚠️ UNVERIFIED`. Don't launder a forum post into a f
       verified 2026-09-13.
 - [x] ~~Verify a *write* back to a radio, not just a read~~ **Yes** — CHIRP.app
       GUI upload confirmed on a physical FT-277R, 2026-09-13.
+- [x] ~~Headless write, end to end, verified by read-back~~ **Yes** — both
+      radios, 2026-09-13, `cmp`-identical. See "Headless end-to-end write".
+- [x] ~~`codeplugger` support for FT-270R/FT-277R export~~ **Yes** — radio ids
+      `yaesu_ft270` / `yaesu_ft277` plus MARS variants; `scripts/ft27x-csv-to-img.py`
+      bridges its CHIRP CSV to a clone image. HA2 export is still open.
 - [ ] Fix `scripts/ft27x-read.py` for reliable headless full-image
-      verification (header resync + block-ACK bugs found and fixed; not yet
-      proven end-to-end against a real full transfer)
-- [ ] `codeplugger` support for Yaesu HA2/FT-270R/FT-277R export (Eric taking
-      this on directly; channel data currently only resolves through
-      codeplugger's build pipeline, not present as static files here)
+      verification. Not a blocker any more — `ft27x-probe.py` does a correct
+      full read and is what the verified pipeline uses — but the two scripts
+      should be reconciled or one retired.
 - [ ] Exact memory map for channel entries beyond what `vx170.py` models
-- [ ] MARS/CAP / extended-TX mod procedure for each model
+- [ ] MARS/CAP / extended-TX mod procedure for each model. Both bench radios
+      arrived already modded, so the procedure is unknown and the post-mod
+      transmit span is unmeasured — see `FIRMWARE.md`.
 - [ ] Firmware version string location and known revisions

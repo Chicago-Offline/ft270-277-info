@@ -3,6 +3,14 @@ cps/**
 !cps/.gitkeep
 !cps/README.md
 
+# Real codeplugs. This repo is PUBLIC; a programmed radio's image carries the
+# owner's actual channel plan, including private simplex frequencies and tone
+# codes. Only near-factory reference captures belong here — see dumps/README.md.
+dumps/*prewrite*.img
+dumps/*postwrite*.img
+dumps/*before*.img
+dumps/*after*.img
+
 # Large binaries
 *.zip
 *.exe

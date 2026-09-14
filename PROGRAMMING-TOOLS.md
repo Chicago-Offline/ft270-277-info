@@ -94,19 +94,23 @@ layout are concerned. No CHIRP patch, no fork, no upstream PR needed for either.
 reverse) fails the model check by design. That check is a guard, not an
 obstacle — see the warning in the safety section.
 
-### ✅ Upload/write confirmed working — use CHIRP.app directly, not a headless script
+### ✅ Upload/write confirmed working — GUI *and* headless
 
-**2026-09-13: uploaded a 2-channel test set to a real FT-277R via `CHIRP.app`'s
-normal GUI (File → Open CSV → Radio → Upload To Radio). Confirmed present on
-the physical radio afterward.** This is the recommended path for actually
-programming a radio.
+**2026-09-13, first pass: uploaded a 2-channel test set to a real FT-277R via
+`CHIRP.app`'s normal GUI (File → Open CSV → Radio → Upload To Radio). Confirmed
+present on the physical radio afterward.**
 
-This project's headless scripts (`ft27x-probe.py`, `ft27x-read.py`,
-`ft27x-write.py`) hit real, since-fixed protocol bugs on *read-back
-verification* (see below) before this succeeded. **The GUI upload worked on
-the first real attempt once it was tried** — the radio, cable, and clone
-protocol were never the problem; my custom reader was. If you just want
-channels on the radio, use CHIRP.app. Use the scripts here for headless
+**2026-09-13, same day: both radios programmed headlessly from a codeplug CSV,
+each verified by a read-back that was byte-identical to the image sent.** The
+full pipeline and its numbers are in the README under "Headless end-to-end
+write"; the per-script detail is below.
+
+The GUI upload worked on the first real attempt once it was tried, while the
+headless path took longer — but the delay was never the radio, the cable, or the
+clone protocol. It was a stale-buffer flush racing the operator's PTT press, and
+the missing CSV→image step. Both are fixed. Either path is now fine; the
+headless one is reproducible and diffable, which matters if the codeplug is
+generated rather than hand-edited. Use the scripts here for headless
 model-ID probing, not yet for routine read/write.
 
 ### 🔴 Clone baud is 9600 — don't go chasing baud rates
@@ -141,9 +145,53 @@ ground truth — no driver, optional baud sweep, hexdumps whatever arrives.
 
 **Arm the host first, then press PTT.** Not the other way around.
 
-`scripts/ft27x-probe.py` does exactly this. It is read-only: it runs `sync_in()`,
-lets the model check fail if it's going to, then scans the captured bytes for an
-`AHnnnX`-style ID and saves the image to `dumps/`.
+🔴 **This is not a style preference, it is the #1 failure mode.**
+`ft27x-probe.py` drains the input buffer before handing the port to the driver,
+because stale bytes desync the header parse. If you press PTT *before* the
+script arms, the header lands in that buffer, gets flushed as garbage, and the
+read dies with `Failed to read header (3)` — while the log helpfully shows the
+bytes it just threw away:
+
+```
+flushed 8 stale byte(s) from input buffer: 41 48 30 32 32 55 80 01
+sync_in: RadioError: Failed to communicate with radio: Failed to read header (3)
+```
+
+`41 48 30 32 32 55` is `AH022U`. The read was one flush away from working.
+Power-cycle the radio back into clone mode and retry, PTT *after* the script
+prints its banner.
+
+### Building an image from a CSV
+
+`ft27x-write.py` only speaks clone images, so `scripts/ft27x-csv-to-img.py`
+bridges the gap: it takes a CHIRP-format CSV plus a **base image** and produces a
+writable 6057-byte clone image.
+
+```bash
+~/src/chirp/.venv/bin/python scripts/ft27x-csv-to-img.py \
+    --base dumps/ft277r-2026-09-13-prewrite.img \
+    --csv  codeplug.csv --driver Yaesu_VX-177 --out new.img
+```
+
+The base supplies everything the CSV does not describe — menu settings, squelch,
+the model-ID header — so **use a fresh read of the radio you are about to
+write**, not a stale dump from another session or another radio. Channels the
+CSV does not mention are erased unless `--keep-extra` is passed, so the result is
+a faithful picture of the CSV rather than a merge with whatever was on the radio.
+
+It enforces the same cross-band model-ID guard as `ft27x-write.py`, plus bounds
+and in-band checks on every row.
+
+Two traps it exists to avoid:
+
+- **`radio.save()` is not a clone image.** CHIRP appends its own metadata blob,
+  yielding 6210 bytes. `ft27x-write.py` correctly refuses anything that is not
+  exactly `_memsize`. The script writes raw `_mmap.get_packed()` instead.
+- **The name charset silently drops characters.** Valid names are `A-Z`, `0-9`,
+  space and `*+,-/|[]_` — **no lowercase, no `.`** — 6 characters max. A name
+  like `S446.0` becomes `S4460` without an error. The script prints
+  `name changed from …` whenever the radio's charset alters what you asked for;
+  read that column.
 
 ### Verified working cable
 
